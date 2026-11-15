@@ -9,12 +9,14 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.20" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="8.0.21" />
     <PackageReference Include="MongoDB.Driver" Version="3.14.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\AstroHealth.Shared\AstroHealth.Shared.csproj" />
+    <ProjectReference Include="..\AstroHealth.Client\AstroHealth.Client.csproj" />
   </ItemGroup>
 
 </Project>
