@@ -1,0 +1,26 @@
+@inject AlertService Alerts
+
+<article class="metric-card status-@StatusClass">
+    <div class="metric-topline">
+        <span class="metric-label">@Title</span>
+        <span class="metric-indicator" aria-hidden="true"></span>
+    </div>
+    <div class="metric-value">@Value <span class="metric-unit">@Unit</span></div>
+    <div class="metric-footer">
+        <span class="metric-status">@Status</span>
+        @if (!string.IsNullOrWhiteSpace(Detail))
+        {
+            <span class="metric-detail">@Detail</span>
+        }
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = "—";
+    [Parameter] public string Unit { get; set; } = string.Empty;
+    [Parameter] public string Status { get; set; } = "No data";
+    [Parameter] public string? Detail { get; set; }
+
+    private string StatusClass => Alerts.GetStatusClass(Status);
+}

@@ -1,0 +1,6 @@
+@AstroHealth.Server_HostAddress = http://localhost:5258
+
+GET {{AstroHealth.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

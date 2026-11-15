@@ -1,0 +1,140 @@
+@page "/bodymap"
+@implements IDisposable
+@inject HealthApiService Api
+@inject CrewProfileService Profiles
+
+<PageTitle>Body systems | AstroHealth</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <div class="eyebrow">CREW HEALTH / SYSTEMS MAP</div>
+        <h1>Know your <span class="heading-accent">systems.</span></h1>
+        <p class="page-subtitle">Select a region to see the mission health signals it connects to.</p>
+    </div>
+</div>
+
+<div class="bodymap-layout">
+    <section class="panel bodymap-panel" aria-label="Interactive body systems map">
+        <div class="body-illustration">
+            <svg viewBox="0 0 300 560" class="body-svg" aria-hidden="true">
+                <defs>
+                    <linearGradient id="bodyGlow" x1="0" x2="1" y1="0" y2="1">
+                        <stop offset="0" stop-color="#173a45" />
+                        <stop offset="1" stop-color="#10242c" />
+                    </linearGradient>
+                </defs>
+                <circle cx="150" cy="68" r="39" fill="url(#bodyGlow)" stroke="#31515a" stroke-width="2" />
+                <path d="M124 112 Q150 101 176 112 L205 139 L232 221 L207 230 L188 177 L190 285 L110 285 L112 177 L93 230 L68 221 L95 139 Z" fill="url(#bodyGlow)" stroke="#31515a" stroke-width="2" />
+                <path d="M119 285 L181 285 L191 420 L174 420 L160 314 L154 420 L137 420 L126 314 L112 420 L95 420 Z" fill="url(#bodyGlow)" stroke="#31515a" stroke-width="2" />
+                <path d="M96 143 L73 222 M204 143 L227 222" fill="none" stroke="#31515a" stroke-width="14" stroke-linecap="round" />
+                <path d="M150 123 L150 276 M118 284 L182 284 M129 312 L171 312" fill="none" stroke="#26434c" stroke-width="1" stroke-dasharray="4 7" />
+                <path d="M143 147 C131 138 123 149 127 160 C131 171 150 181 150 181 C150 181 169 171 173 160 C177 149 169 138 157 147 L150 154 Z" fill="#ef855b" opacity=".85" />
+                <path d="M138 130 C130 121 123 131 128 141 L136 157 L145 143 Z M162 130 C170 121 177 131 172 141 L164 157 L155 143 Z" fill="#59c8b3" opacity=".65" />
+                <circle cx="150" cy="67" r="18" fill="none" stroke="#d7b878" stroke-width="1.5" opacity=".7" />
+                <path d="M138 309 L150 322 L162 309 M137 337 L150 350 L163 337 M136 365 L150 378 L164 365" fill="none" stroke="#d7b878" stroke-width="2" opacity=".7" />
+            </svg>
+            <button type="button" class="map-pin pin-brain" aria-label="Brain and sleep" @onclick='() => SelectRegion("Brain")'></button>
+            <button type="button" class="map-pin pin-heart" aria-label="Heart and circulation" @onclick='() => SelectRegion("Heart")'></button>
+            <button type="button" class="map-pin pin-lungs" aria-label="Lungs and oxygen" @onclick='() => SelectRegion("Lungs")'></button>
+            <button type="button" class="map-pin pin-bones" aria-label="Bones and microgravity" @onclick='() => SelectRegion("Bones")'></button>
+        </div>
+        <div class="bodymap-legend"><span><i class="legend-dot heart-dot"></i> CIRCULATORY</span><span><i class="legend-dot lungs-dot"></i> RESPIRATORY</span><span><i class="legend-dot bone-dot"></i> MUSCULOSKELETAL</span></div>
+    </section>
+
+    <aside class="panel system-detail">
+        <div class="eyebrow">SELECTED SYSTEM</div>
+        @if (Profiles.SelectedAstronaut is null)
+        {
+            <div class="detail-empty"><span class="detail-cross">+</span><h2>No crew profile</h2><p>Create a profile to see its latest health signals here.</p></div>
+        }
+        else if (SelectedRegion is null)
+        {
+            <div class="detail-empty"><span class="detail-cross">+</span><h2>Choose a body region</h2><p>Explore how mission conditions can affect different health systems.</p></div>
+        }
+        else
+        {
+            <div class="system-number">@SelectedRegion.Index</div>
+            <h2>@SelectedRegion.Name</h2>
+            <p>@SelectedRegion.Description</p>
+            <div class="detail-divider"></div>
+            <div class="detail-metric-label">LATEST CONNECTED SIGNAL</div>
+            <strong class="detail-metric">@SelectedRegion.Signal</strong>
+            <div class="detail-context">@SelectedRegion.Context</div>
+        }
+        @if (_loadError is not null)
+        {
+            <div class="notice-panel notice-error bodymap-notice" role="alert">@_loadError</div>
+        }
+        <a href="guidance" class="text-link">Explore crew guidance <span>↗</span></a>
+    </aside>
+</div>
+
+@code {
+    private HealthReadingDto? _latest;
+    private string? _selectedRegionName;
+    private string? _loadError;
+    private RegionInfo? SelectedRegion => _selectedRegionName switch
+    {
+        "Brain" => new("01", "Brain & sleep", "Sleep and mood provide a useful self-check on recovery and wellbeing. Isolation and a disrupted day-night cycle can affect both.", $"{_latest?.SleepHours?.ToString("F1") ?? "—"} hrs sleep · mood {_latest?.MoodScore?.ToString() ?? "—"}/10", "Log sleep and mood regularly to help notice changes."),
+        "Heart" => new("02", "Heart & circulation", "Microgravity changes how fluids move through the body. Heart rate and blood pressure are important signals to record consistently.", $"{_latest?.HeartRate?.ToString() ?? "—"} bpm · BP {_latest?.BloodPressureSystolic?.ToString() ?? "—"}/{_latest?.BloodPressureDiastolic?.ToString() ?? "—"}", "Follow mission medical protocols for unusual readings."),
+        "Lungs" => new("03", "Lungs & oxygen", "A closed spacecraft environment requires careful monitoring of oxygen and air quality. Oxygen saturation is one useful health indicator.", $"{_latest?.OxygenSaturation?.ToString("F1") ?? "—"}% SpO₂", "If concerned about breathing or cabin air, alert the crew medical officer."),
+        "Bones" => new("04", "Bones & movement", "Without Earth's gravity, bones and muscles need special attention. Exercise and mission-specific monitoring support musculoskeletal health.", $"{_latest?.RadiationDose?.ToString("F2") ?? "—"} mSv radiation dose", "Maintain prescribed exercise and medical follow-up."),
+        _ => null
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Profiles.InitializeAsync();
+            Profiles.SelectedAstronautChanged += OnSelectedAstronautChanged;
+            await LoadLatestAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            _loadError = $"Unable to load crew profiles. Check the API and database connection. {exception.Message}";
+        }
+        catch (InvalidDataException exception)
+        {
+            _loadError = exception.Message;
+        }
+        catch (JsonException exception)
+        {
+            _loadError = $"The crew profiles response was invalid. {exception.Message}";
+        }
+    }
+
+    private async Task LoadLatestAsync()
+    {
+        _loadError = null;
+        _latest = null;
+        var astronautId = Profiles.SelectedAstronaut?.AstronautId;
+        if (astronautId is null)
+            return;
+
+        try
+        {
+            _latest = await Api.GetLatestReadingAsync(astronautId);
+        }
+        catch (HttpRequestException exception)
+        {
+            _loadError = $"Latest health data is unavailable. {exception.Message}";
+        }
+        catch (InvalidDataException exception)
+        {
+            _loadError = exception.Message;
+        }
+        catch (JsonException exception)
+        {
+            _loadError = $"The health data response was invalid. {exception.Message}";
+        }
+    }
+
+    private void SelectRegion(string name) => _selectedRegionName = name;
+
+    private void OnSelectedAstronautChanged() => _ = InvokeAsync(LoadLatestAsync);
+
+    public void Dispose() => Profiles.SelectedAstronautChanged -= OnSelectedAstronautChanged;
+
+    private sealed record RegionInfo(string Index, string Name, string Description, string Signal, string Context);
+}

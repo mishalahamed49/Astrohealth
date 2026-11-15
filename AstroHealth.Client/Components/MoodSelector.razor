@@ -1,0 +1,32 @@
+<div class="mood-selector" role="group" aria-label="Select your mood from one to ten">
+    @foreach (var mood in Moods)
+    {
+        <button type="button"
+                class="mood-option @(Value == mood.Score ? "selected" : null)"
+                aria-label="@mood.Label, score @mood.Score"
+                aria-pressed="@(Value == mood.Score)"
+                @onclick="() => ValueChanged.InvokeAsync(mood.Score)">
+            <span>@mood.Emoji</span>
+            <small>@mood.Score</small>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public int? Value { get; set; }
+    [Parameter] public EventCallback<int?> ValueChanged { get; set; }
+
+    private static readonly (int Score, string Emoji, string Label)[] Moods =
+    [
+        (1, "◉", "Very low"),
+        (2, "◔", "Low"),
+        (3, "◑", "Below neutral"),
+        (4, "◕", "A little low"),
+        (5, "○", "Neutral"),
+        (6, "◔", "Steady"),
+        (7, "◑", "Good"),
+        (8, "◕", "Very good"),
+        (9, "●", "Excellent"),
+        (10, "✦", "Outstanding")
+    ];
+}

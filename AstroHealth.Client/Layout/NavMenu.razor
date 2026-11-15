@@ -1,0 +1,86 @@
+﻿@implements IDisposable
+@inject CrewProfileService Profiles
+
+<div class="brand">
+    <div class="brand-mark" aria-hidden="true"><span>A</span></div>
+    <div>
+        <div class="brand-name">ASTRO<span>HEALTH</span></div>
+        <div class="brand-caption">CREW WELLNESS SYSTEM</div>
+    </div>
+</div>
+
+<div class="profile-control">
+    <label for="active-astronaut">ACTIVE REPORT</label>
+    @if (Profiles.Astronauts.Count == 0)
+    {
+        <div class="profile-empty">No crew profiles yet.</div>
+    }
+    else
+    {
+        <select id="active-astronaut"
+                value="@Profiles.SelectedAstronaut?.AstronautId"
+                @onchange="SelectAstronaut">
+            @foreach (var astronaut in Profiles.Astronauts)
+            {
+                <option value="@astronaut.AstronautId">@astronaut.Name</option>
+            }
+        </select>
+    }
+    <NavLink class="profile-manage" href="crew">Manage crew profiles <span>↗</span></NavLink>
+</div>
+
+<div class="nav-section-label">OVERVIEW</div>
+<nav class="main-nav" aria-label="Main navigation">
+    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+        <span class="nav-icon">01</span><span class="nav-label">Health dashboard</span>
+    </NavLink>
+    <NavLink class="nav-link" href="log-reading">
+        <span class="nav-icon">02</span><span class="nav-label">Log a reading</span>
+    </NavLink>
+    <NavLink class="nav-link" href="trends">
+        <span class="nav-icon">03</span><span class="nav-label">Health trends</span>
+    </NavLink>
+    <NavLink class="nav-link" href="bodymap">
+        <span class="nav-icon">04</span><span class="nav-label">Body systems</span>
+    </NavLink>
+    <NavLink class="nav-link" href="guidance">
+        <span class="nav-icon">05</span><span class="nav-label">Crew guidance</span>
+    </NavLink>
+    <NavLink class="nav-link" href="crew">
+        <span class="nav-icon">06</span><span class="nav-label">Crew profiles</span>
+    </NavLink>
+</nav>
+
+<div class="sidebar-footer">
+    <div class="crew-avatar">@Initials</div>
+    <div>
+        <div class="crew-name">@(Profiles.SelectedAstronaut?.Name ?? "No profile")</div>
+        <div class="crew-role">@(Profiles.SelectedAstronaut?.Role ?? "ADD A PROFILE")</div>
+    </div>
+    <span class="crew-chevron">···</span>
+</div>
+
+@code {
+    protected override void OnInitialized() =>
+        Profiles.SelectedAstronautChanged += OnSelectedAstronautChanged;
+
+    private string Initials
+    {
+        get
+        {
+            var name = Profiles.SelectedAstronaut?.Name;
+            if (string.IsNullOrWhiteSpace(name))
+                return "--";
+
+            return string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Take(2)
+                .Select(part => char.ToUpperInvariant(part[0])));
+        }
+    }
+
+    private void SelectAstronaut(ChangeEventArgs args) => Profiles.Select(args.Value?.ToString());
+
+    private void OnSelectedAstronautChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Profiles.SelectedAstronautChanged -= OnSelectedAstronautChanged;
+}

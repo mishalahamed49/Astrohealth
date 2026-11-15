@@ -1,0 +1,126 @@
+@page "/trends"
+@implements IDisposable
+@inject HealthApiService Api
+@inject CrewProfileService Profiles
+
+<PageTitle>Health trends | AstroHealth</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <div class="eyebrow">CREW HEALTH / HISTORY</div>
+        <h1>Signals over <span class="heading-accent">time.</span></h1>
+        <p class="page-subtitle">Review recent heart-rate readings for @(Profiles.SelectedAstronaut?.Name ?? "the selected crew member").</p>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="notice-panel notice-error" role="alert">@_error</div>
+}
+else if (_isLoading)
+{
+    <div class="notice-panel">Loading individual health history...</div>
+}
+else if (Profiles.SelectedAstronaut is null)
+{
+    <div class="notice-panel">Create a crew profile to view an individual trend. <a href="crew">Manage crew profiles</a>.</div>
+}
+else if (_readings.Count == 0)
+{
+    <div class="notice-panel">No readings yet. <a href="log-reading">Log your first check-in</a> to begin a trend.</div>
+}
+else
+{
+    @if (_readings.Any(reading => reading.IsSynthetic))
+    {
+        <div class="synthetic-notice"><strong>SYNTHETIC DEMO DATA</strong><span>Sample readings are fictional; real Synthea output has not been imported.</span></div>
+    }
+    <div class="panel trend-panel full-trend-panel">
+        <div class="panel-heading">
+            <div><div class="eyebrow">LATEST @_readings.Count READINGS</div><h2>Heart rate</h2></div>
+            <span class="chart-legend"><i></i> HEART RATE · BPM</span>
+        </div>
+        <TrendChart Readings="_readings" />
+        <p class="chart-caption">Only recorded heart-rate values are plotted. Use trends as context and follow crew medical guidance.</p>
+    </div>
+    <div class="history-list">
+        @foreach (var reading in _readings)
+        {
+            <div class="history-row">
+                <time>@reading.Timestamp.ToLocalTime().ToString("MMM d, yyyy · HH:mm")</time>
+                <strong>@(reading.HeartRate?.ToString() ?? "—") <small>bpm</small></strong>
+                <span class="status-pill status-pill-@reading.OverallStatus.ToLowerInvariant()">@reading.OverallStatus</span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<HealthReadingDto> _readings = Array.Empty<HealthReadingDto>();
+    private string? _error;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Profiles.InitializeAsync();
+            Profiles.SelectedAstronautChanged += OnSelectedAstronautChanged;
+            await LoadReadingsAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            _error = $"Unable to load crew profiles. Check the API and database connection. {exception.Message}";
+        }
+        catch (InvalidDataException exception)
+        {
+            _error = exception.Message;
+        }
+        catch (JsonException exception)
+        {
+            _error = $"The crew profiles response was invalid. {exception.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadReadingsAsync()
+    {
+        _isLoading = true;
+        _error = null;
+        _readings = Array.Empty<HealthReadingDto>();
+        var astronautId = Profiles.SelectedAstronaut?.AstronautId;
+        if (astronautId is null)
+        {
+            _isLoading = false;
+            return;
+        }
+
+        try
+        {
+            _readings = await Api.GetReadingsAsync(astronautId);
+        }
+        catch (HttpRequestException exception)
+        {
+            _error = $"Unable to load health history. Check the API and database connection. {exception.Message}";
+        }
+        catch (InvalidDataException exception)
+        {
+            _error = exception.Message;
+        }
+        catch (JsonException exception)
+        {
+            _error = $"The health history response was invalid. {exception.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnSelectedAstronautChanged() => _ = InvokeAsync(LoadReadingsAsync);
+
+    public void Dispose() => Profiles.SelectedAstronautChanged -= OnSelectedAstronautChanged;
+}

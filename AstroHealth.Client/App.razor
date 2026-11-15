@@ -1,0 +1,35 @@
+﻿<MudThemeProvider Theme="@_theme" IsDarkMode="true" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <PageTitle>Not found</PageTitle>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <p role="alert">Sorry, there's nothing at this address.</p>
+        </LayoutView>
+    </NotFound>
+</Router>
+
+@code {
+    private readonly MudTheme _theme = new()
+    {
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#72D6BD",
+            Secondary = "#E4BC73",
+            Tertiary = "#70B7D0",
+            Background = "#0C171C",
+            Surface = "#13252C",
+            DrawerBackground = "#101F25",
+            AppbarBackground = "#101F25",
+            TextPrimary = "#E7ECE8",
+            TextSecondary = "#91A5A7"
+        }
+    };
+}

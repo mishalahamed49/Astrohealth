@@ -1,0 +1,202 @@
+@page "/"
+@page "/dashboard"
+@implements IDisposable
+@inject HealthApiService Api
+@inject CrewProfileService Profiles
+@inject AlertService Alerts
+
+<PageTitle>Health dashboard | AstroHealth</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <div class="eyebrow">CREW HEALTH / LIVE SNAPSHOT</div>
+        <h1>Good day, <span class="heading-accent">@GreetingName.</span></h1>
+        <p class="page-subtitle">A clear view of your health across the mission.</p>
+    </div>
+    <MudButton Href="log-reading" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">
+        Log a reading
+    </MudButton>
+</div>
+
+<section class="mission-strip" aria-label="Mission information">
+    <div><span class="strip-label">CREW MEMBER</span><strong>@(Profiles.SelectedAstronaut?.Name ?? "NO PROFILE SELECTED")</strong></div>
+    <div><span class="strip-label">ENVIRONMENT</span><strong>@(Profiles.SelectedAstronaut?.MissionEnvironment.ToUpperInvariant() ?? "NOT SET")</strong></div>
+    <div><span class="strip-label">LAST CHECK-IN</span><strong>@(_latest is null ? "NO READINGS YET" : _latest.Timestamp.ToLocalTime().ToString("MMM d · HH:mm"))</strong></div>
+    <div class="strip-status"><span class="live-dot"></span> SYSTEM READY</div>
+</section>
+
+@if (_latest?.IsSynthetic == true)
+{
+    <div class="synthetic-notice"><strong>SYNTHETIC DEMO DATA</strong><span>These sample readings are fictional and are not medical guidance.</span></div>
+}
+
+@if (_isLoading)
+{
+    <div class="notice-panel">Connecting to the health systems...</div>
+}
+else if (_loadError is not null)
+{
+    <div class="notice-panel notice-error" role="alert">
+        <strong>Health data unavailable</strong>
+        <span>@_loadError</span>
+    </div>
+}
+else if (Profiles.SelectedAstronaut is null)
+{
+    <div class="welcome-panel">
+        <div class="welcome-orbit" aria-hidden="true"><span></span></div>
+        <div>
+            <div class="eyebrow">INDIVIDUAL REPORT</div>
+            <h2>Create a crew profile to get started.</h2>
+            <p>Each profile has its own readings, trends, alerts, and body-system view.</p>
+            <MudButton Href="crew" Variant="Variant.Filled" Color="Color.Primary">Create crew profile</MudButton>
+        </div>
+    </div>
+}
+else if (_latest is null)
+{
+    <div class="welcome-panel">
+        <div class="welcome-orbit" aria-hidden="true"><span></span></div>
+        <div>
+            <div class="eyebrow">FIRST CHECK-IN</div>
+            <h2>Your mission health record starts here.</h2>
+            <p>Log a reading to see your vital signs, recent trends, and tailored crew guidance.</p>
+            <MudButton Href="log-reading" Variant="Variant.Filled" Color="Color.Primary">Record first reading</MudButton>
+        </div>
+    </div>
+}
+else
+{
+    <div class="section-heading">
+        <div><div class="eyebrow">LATEST READING</div><h2>Vital signs</h2></div>
+        <span class="status-pill status-pill-@Alerts.GetStatusClass(_latest.OverallStatus)">@_latest.OverallStatus status</span>
+    </div>
+
+    <section class="metric-grid" aria-label="Latest health metrics">
+        <HealthCard Title="Heart rate" Value="@Number(_latest.HeartRate)" Unit="bpm" Status="@MetricStatus(_latest.HeartRate is null, _latest.HeartRate is < 50 or > 110)" Detail="Resting pulse" />
+        <HealthCard Title="Blood pressure" Value="@BloodPressure(_latest)" Unit="mmHg" Status="@MetricStatus(_latest.BloodPressureSystolic is null, _latest.BloodPressureSystolic is < 90 or > 140)" Detail="Systolic / diastolic" />
+        <HealthCard Title="Blood glucose" Value="@Number(_latest.BloodSugar, "F1")" Unit="mg/dL" Status="@MetricStatus(_latest.BloodSugar is null, _latest.BloodSugar is < 70 or > 180)" Detail="Blood sugar" />
+        <HealthCard Title="Body temperature" Value="@Number(_latest.BodyTemperature, "F1")" Unit="°C" Status="@MetricStatus(_latest.BodyTemperature is null, _latest.BodyTemperature is < 36 or > 38.5)" Detail="Core temperature" />
+        <HealthCard Title="Sleep" Value="@Number(_latest.SleepHours, "F1")" Unit="hrs" Status="@MetricStatus(_latest.SleepHours is null, _latest.SleepHours is < 6)" Detail="Last rest period" />
+        <HealthCard Title="Mood" Value="@Mood(_latest.MoodScore)" Unit="/ 10" Status="@MetricStatus(_latest.MoodScore is null, _latest.MoodScore is <= 3)" Detail="Self-reported" />
+        <HealthCard Title="Oxygen saturation" Value="@Number(_latest.OxygenSaturation, "F1")" Unit="%" Status="@MetricStatus(_latest.OxygenSaturation is null, _latest.OxygenSaturation is < 95)" Detail="SpO₂" />
+        <HealthCard Title="Radiation dose" Value="@Number(_latest.RadiationDose, "F2")" Unit="mSv" Status="@(_latest.RadiationDose is null ? "No data" : "Recorded")" Detail="Mission cumulative" />
+    </section>
+
+    <section class="dashboard-lower">
+        <div class="panel trend-panel">
+            <div class="panel-heading">
+                <div><div class="eyebrow">LAST 14 CHECK-INS</div><h2>Heart rate trend</h2></div>
+                <span class="chart-legend"><i></i> HEART RATE · BPM</span>
+            </div>
+            <TrendChart Readings="_readings" />
+        </div>
+        <div class="panel alert-panel">
+            <div class="panel-heading">
+                <div><div class="eyebrow">SYSTEM REVIEW</div><h2>Attention points</h2></div>
+                <span class="alert-count">@_latest.Alerts.Count.ToString("00")</span>
+            </div>
+            @if (_latest.Alerts.Count == 0)
+            {
+                <div class="clear-state"><span class="clear-mark">✓</span><div><strong>No alerts</strong><p>Keep logging consistently to monitor changes.</p></div></div>
+            }
+            else
+            {
+                <ul class="alert-list">
+                    @foreach (var alert in _latest.Alerts)
+                    {
+                        <li><span class="alert-bullet"></span>@alert</li>
+                    }
+                </ul>
+            }
+            <a class="text-link" href="guidance">View crew guidance <span>↗</span></a>
+        </div>
+    </section>
+}
+
+@code {
+    private HealthReadingDto? _latest;
+    private IReadOnlyList<HealthReadingDto> _readings = Array.Empty<HealthReadingDto>();
+    private bool _isLoading = true;
+    private string? _loadError;
+    private string GreetingName =>
+        Profiles.SelectedAstronaut?.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()
+        ?? "Crew member";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Profiles.InitializeAsync();
+            Profiles.SelectedAstronautChanged += OnSelectedAstronautChanged;
+            await LoadReportAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            _loadError = $"Unable to load crew profiles. Check the API and MongoDB connection. {exception.Message}";
+        }
+        catch (InvalidDataException exception)
+        {
+            _loadError = exception.Message;
+        }
+        catch (JsonException exception)
+        {
+            _loadError = $"The crew profiles response was invalid. {exception.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _isLoading = true;
+        _loadError = null;
+        _latest = null;
+        _readings = Array.Empty<HealthReadingDto>();
+
+        var astronautId = Profiles.SelectedAstronaut?.AstronautId;
+        if (astronautId is null)
+        {
+            _isLoading = false;
+            return;
+        }
+
+        try
+        {
+            _latest = await Api.GetLatestReadingAsync(astronautId);
+            _readings = await Api.GetReadingsAsync(astronautId);
+        }
+        catch (HttpRequestException exception)
+        {
+            _loadError = $"Unable to load this individual report. Check the API and MongoDB connection. {exception.Message}";
+        }
+        catch (InvalidDataException exception)
+        {
+            _loadError = exception.Message;
+        }
+        catch (JsonException exception)
+        {
+            _loadError = $"The health data response was invalid. {exception.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OnSelectedAstronautChanged() => _ = InvokeAsync(LoadReportAsync);
+
+    public void Dispose() => Profiles.SelectedAstronautChanged -= OnSelectedAstronautChanged;
+
+    private static string Number(int? value) => value?.ToString() ?? "—";
+    private static string Number(double? value, string format) => value?.ToString(format) ?? "—";
+    private static string BloodPressure(HealthReadingDto reading) =>
+        reading.BloodPressureSystolic is null && reading.BloodPressureDiastolic is null
+            ? "—"
+            : $"{reading.BloodPressureSystolic?.ToString() ?? "—"} / {reading.BloodPressureDiastolic?.ToString() ?? "—"}";
+    private static string Mood(int? score) => score?.ToString() ?? "—";
+    private static string MetricStatus(bool missing, bool outOfRange) =>
+        missing ? "No data" : outOfRange ? "Warning" : "Normal";
+}

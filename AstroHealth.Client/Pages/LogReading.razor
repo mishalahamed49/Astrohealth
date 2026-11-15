@@ -1,0 +1,146 @@
+@page "/log-reading"
+@implements IDisposable
+@inject HealthApiService Api
+@inject NavigationManager Navigation
+@inject CrewProfileService Profiles
+
+<PageTitle>Log a reading | AstroHealth</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <div class="eyebrow">CREW HEALTH / DAILY CHECK-IN</div>
+        <h1>Log a <span class="heading-accent">reading.</span></h1>
+        <p class="page-subtitle">Enter the measurements available to you. You can leave any field blank.</p>
+    </div>
+</div>
+
+@if (_isInitializing)
+{
+    <div class="notice-panel">Loading crew profiles...</div>
+}
+else if (_profileError is not null)
+{
+    <div class="notice-panel notice-error" role="alert">@_profileError</div>
+}
+else if (Profiles.SelectedAstronaut is null)
+{
+    <div class="notice-panel">Create a crew profile before logging an individual reading. <a href="crew">Manage crew profiles</a>.</div>
+}
+else
+{
+<div class="form-layout">
+    <EditForm Model="_draft" OnValidSubmit="SaveReading">
+        <DataAnnotationsValidator />
+        <div class="panel reading-form">
+            <div class="form-section-title"><span>01</span><div><h2>Vitals</h2><p>Record the measurements from your latest check.</p></div></div>
+            <div class="form-grid">
+                <label class="field"><span>Heart rate <small>bpm</small></span><InputNumber @bind-Value="_draft.HeartRate" min="1" max="250" placeholder="e.g. 72" /><ValidationMessage For="@(() => _draft.HeartRate)" /></label>
+                <label class="field"><span>Systolic pressure <small>mmHg</small></span><InputNumber @bind-Value="_draft.BloodPressureSystolic" min="1" max="300" placeholder="e.g. 118" /><ValidationMessage For="@(() => _draft.BloodPressureSystolic)" /></label>
+                <label class="field"><span>Diastolic pressure <small>mmHg</small></span><InputNumber @bind-Value="_draft.BloodPressureDiastolic" min="1" max="200" placeholder="e.g. 76" /><ValidationMessage For="@(() => _draft.BloodPressureDiastolic)" /></label>
+                <label class="field"><span>Blood sugar <small>mg/dL</small></span><InputNumber @bind-Value="_draft.BloodSugar" min="1" max="1000" step="0.1" placeholder="e.g. 95" /><ValidationMessage For="@(() => _draft.BloodSugar)" /></label>
+                <label class="field"><span>Body temperature <small>°C</small></span><InputNumber @bind-Value="_draft.BodyTemperature" min="25" max="45" step="0.1" placeholder="e.g. 36.8" /><ValidationMessage For="@(() => _draft.BodyTemperature)" /></label>
+                <label class="field"><span>Oxygen saturation <small>%</small></span><InputNumber @bind-Value="_draft.OxygenSaturation" min="0" max="100" step="0.1" placeholder="e.g. 98" /><ValidationMessage For="@(() => _draft.OxygenSaturation)" /></label>
+            </div>
+        </div>
+
+        <div class="panel reading-form secondary-form">
+            <div class="form-section-title"><span>02</span><div><h2>Recovery &amp; wellbeing</h2><p>Self-reported measures help complete the picture.</p></div></div>
+            <div class="form-grid">
+                <label class="field"><span>Sleep <small>hours</small></span><InputNumber @bind-Value="_draft.SleepHours" min="0" max="24" step="0.1" placeholder="e.g. 7.5" /><ValidationMessage For="@(() => _draft.SleepHours)" /></label>
+                <label class="field"><span>Radiation dose <small>mission cumulative · mSv</small></span><InputNumber @bind-Value="_draft.RadiationDose" min="0" step="0.01" placeholder="e.g. 12.40" /><ValidationMessage For="@(() => _draft.RadiationDose)" /></label>
+            </div>
+            <div class="field mood-field">
+                <span>Mood <small>choose a score from 1 to 10</small></span>
+                <MoodSelector @bind-Value="_draft.MoodScore" />
+                <ValidationMessage For="@(() => _draft.MoodScore)" />
+            </div>
+        </div>
+
+        @if (_saveError is not null)
+        {
+            <div class="notice-panel notice-error" role="alert">@_saveError</div>
+        }
+
+        <div class="form-actions">
+            <span>Health data is stored for your mission record.</span>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSaving">
+                @(_isSaving ? "Saving..." : "Save check-in")
+            </MudButton>
+        </div>
+    </EditForm>
+    <aside class="form-aside">
+        <div class="aside-index">CHECK-IN NOTES</div>
+        <h3>Small signals matter.</h3>
+        <p>Consistency makes trends more useful. Log at a similar time each day when possible.</p>
+        <div class="aside-rule"></div>
+        <div class="aside-note"><span class="note-symbol">i</span><p>This tool is for self-monitoring, not diagnosis. Follow your mission medical officer’s instructions.</p></div>
+        <div class="aside-metric"><span>RECORDING AS</span><strong>@Profiles.SelectedAstronaut.Name · @Profiles.SelectedAstronaut.Role</strong></div>
+    </aside>
+</div>
+}
+
+@code {
+    private HealthReadingDto _draft = new();
+    private bool _isSaving;
+    private bool _isInitializing = true;
+    private string? _saveError;
+    private string? _profileError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Profiles.InitializeAsync();
+            Profiles.SelectedAstronautChanged += OnSelectedAstronautChanged;
+        }
+        catch (HttpRequestException exception)
+        {
+            _profileError = $"Unable to load crew profiles. Check the API and database connection. {exception.Message}";
+        }
+        catch (InvalidDataException exception)
+        {
+            _profileError = exception.Message;
+        }
+        catch (JsonException exception)
+        {
+            _profileError = $"The crew profiles response was invalid. {exception.Message}";
+        }
+        finally
+        {
+            _isInitializing = false;
+        }
+    }
+
+    private async Task SaveReading()
+    {
+        var astronaut = Profiles.SelectedAstronaut;
+        if (astronaut is null)
+        {
+            _saveError = "Select or create a crew profile before saving this reading.";
+            return;
+        }
+
+        _isSaving = true;
+        _saveError = null;
+        _draft.AstronautId = astronaut.AstronautId;
+        _draft.Timestamp = DateTime.UtcNow;
+
+        try
+        {
+            await Api.AddReadingAsync(_draft);
+            Navigation.NavigateTo("dashboard");
+        }
+        catch (HttpRequestException exception)
+        {
+            _saveError = $"The reading could not be saved. Check the API and database connection. {exception.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void OnSelectedAstronautChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Profiles.SelectedAstronautChanged -= OnSelectedAstronautChanged;
+}

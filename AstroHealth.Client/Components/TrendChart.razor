@@ -1,0 +1,58 @@
+@if (_points.Count == 0)
+{
+    <div class="chart-empty">A trend line will appear after you log readings.</div>
+}
+else
+{
+    <div class="chart-wrap">
+        <svg class="trend-svg" viewBox="0 0 600 210" role="img" aria-label="Heart rate trend in beats per minute">
+            <line x1="42" y1="28" x2="42" y2="168" class="chart-axis" />
+            <line x1="42" y1="168" x2="578" y2="168" class="chart-axis" />
+            <line x1="42" y1="98" x2="578" y2="98" class="chart-gridline" />
+            <line x1="42" y1="42" x2="578" y2="42" class="chart-gridline" />
+            @if (_points.Count > 1)
+            {
+                <polyline points="@Polyline" class="chart-line" />
+            }
+            @foreach (var point in _points)
+            {
+                <circle cx="@point.X" cy="@point.Y" r="4" class="chart-point">
+                    <title>@point.Timestamp.ToLocalTime().ToString("MMM d, HH:mm"): @point.Value bpm</title>
+                </circle>
+            }
+        </svg>
+        @if (_points.Count >= 1)
+        {
+            <div class="chart-date-labels">
+                <span>@_points[0].Timestamp.ToLocalTime().ToString("MMM d")</span>
+                <span>@_points[^1].Timestamp.ToLocalTime().ToString("MMM d")</span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<HealthReadingDto> Readings { get; set; } = Array.Empty<HealthReadingDto>();
+
+    private List<PlotPoint> _points = new();
+    private string Polyline => string.Join(" ", _points.Select(point => $"{point.X:F1},{point.Y:F1}"));
+
+    protected override void OnParametersSet()
+    {
+        var readings = Readings
+            .Where(reading => reading.HeartRate.HasValue)
+            .OrderBy(reading => reading.Timestamp)
+            .TakeLast(14)
+            .ToList();
+
+        _points = readings.Select((reading, index) =>
+        {
+            var x = readings.Count == 1 ? 310 : 42 + (536d * index / (readings.Count - 1));
+            var heartRate = Math.Clamp(reading.HeartRate!.Value, 40, 120);
+            var y = 168 - ((heartRate - 40) / 80d * 140);
+            return new PlotPoint(x, y, reading.HeartRate.Value, reading.Timestamp);
+        }).ToList();
+    }
+
+    private sealed record PlotPoint(double X, double Y, int Value, DateTime Timestamp);
+}

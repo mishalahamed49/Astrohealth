@@ -1,0 +1,66 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject CrewProfileService Profiles
+
+<div class="app-shell">
+    <aside class="sidebar">
+        <NavMenu />
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <div class="mission-status"><span class="live-dot"></span> MISSION CONTROL <span class="topbar-separator">/</span> HEALTH SYSTEMS</div>
+            <div class="topbar-meta">@MissionLabel</div>
+        </header>
+        @if (_profileError is not null)
+        {
+            <div class="notice-panel notice-error profile-load-notice" role="alert">@_profileError</div>
+        }
+        <article class="content">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    private string? _profileError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Profiles.SelectedAstronautChanged += OnSelectedAstronautChanged;
+
+        try
+        {
+            await Profiles.InitializeAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            _profileError = $"Could not load crew profiles. Check the API connection. {exception.Message}";
+        }
+        catch (InvalidDataException exception)
+        {
+            _profileError = exception.Message;
+        }
+        catch (JsonException exception)
+        {
+            _profileError = $"The crew profiles response was invalid. {exception.Message}";
+        }
+    }
+
+    private string MissionLabel
+    {
+        get
+        {
+            var astronaut = Profiles.SelectedAstronaut;
+            if (astronaut is null)
+                return "NO ACTIVE PROFILE";
+
+            var missionDay = Math.Max(1, (DateTime.UtcNow.Date - astronaut.MissionStartDate.Date).Days + 1);
+            return $"{astronaut.MissionEnvironment.ToUpperInvariant()} · MISSION DAY {missionDay}";
+        }
+    }
+
+    private void OnSelectedAstronautChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Profiles.SelectedAstronautChanged -= OnSelectedAstronautChanged;
+}

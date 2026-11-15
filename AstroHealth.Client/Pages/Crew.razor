@@ -1,0 +1,185 @@
+@page "/crew"
+@implements IDisposable
+@inject CrewProfileService Profiles
+@using AstroHealth.Shared.Dtos
+
+<PageTitle>Crew profiles | AstroHealth</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <div class="eyebrow">MISSION RECORDS / CREW DIRECTORY</div>
+        <h1>Individual <span class="heading-accent">reports.</span></h1>
+        <p class="page-subtitle">Each crew profile keeps its readings and health history separate.</p>
+    </div>
+</div>
+
+@if (_isLoading)
+{
+    <div class="notice-panel">Loading crew profiles...</div>
+}
+else if (_loadError is not null)
+{
+    <div class="notice-panel notice-error" role="alert">@_loadError</div>
+}
+else
+{
+    @if (_successMessage is not null)
+    {
+        <div class="notice-panel crew-success" role="status">@_successMessage</div>
+    }
+
+    <div class="crew-layout">
+        <section class="crew-roster">
+            <div class="section-heading">
+                <div><div class="eyebrow">SAVED RECORDS</div><h2>@Profiles.Astronauts.Count crew profiles</h2></div>
+            </div>
+            @if (Profiles.Astronauts.Count == 0)
+            {
+                <div class="notice-panel">No profiles yet. Add the first crew member to begin an individual report.</div>
+            }
+            else
+            {
+                <div class="crew-profile-list">
+                    @foreach (var astronaut in Profiles.Astronauts)
+                    {
+                        <article class="panel crew-profile-card @(Profiles.SelectedAstronaut?.AstronautId == astronaut.AstronautId ? "selected" : null)">
+                            <div class="crew-card-mark">@Initials(astronaut.Name)</div>
+                            <div class="crew-card-info">
+                                <div class="eyebrow">@(Profiles.SelectedAstronaut?.AstronautId == astronaut.AstronautId ? "ACTIVE REPORT" : "CREW PROFILE")</div>
+                                <h3>@astronaut.Name</h3>
+                                <p>@astronaut.Role</p>
+                                <div class="crew-card-meta">
+                                    <span>@astronaut.MissionEnvironment.ToUpperInvariant()</span>
+                                    <span>MISSION START · @astronaut.MissionStartDate.ToLocalTime().ToString("MMM d, yyyy")</span>
+                                </div>
+                            </div>
+                            @if (Profiles.SelectedAstronaut?.AstronautId == astronaut.AstronautId)
+                            {
+                                <span class="crew-active-mark"><i class="live-dot"></i> ACTIVE</span>
+                            }
+                            else
+                            {
+                                <button type="button" class="crew-select-button" @onclick="() => SelectAstronaut(astronaut.AstronautId)">View report <span>↗</span></button>
+                            }
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="panel crew-create-panel">
+            <div class="eyebrow">NEW INDIVIDUAL RECORD</div>
+            <h2>Add a crew member</h2>
+            <p class="crew-form-intro">New profiles start with an empty report. Readings are saved only to the active profile.</p>
+            <EditForm Model="_draft" OnValidSubmit="CreateProfileAsync">
+                <DataAnnotationsValidator />
+                <label class="field">
+                    <span>Name</span>
+                    <InputText @bind-Value="_draft.Name" maxlength="100" placeholder="e.g. Maya Chen" />
+                    <ValidationMessage For="@(() => _draft.Name)" />
+                </label>
+                <label class="field">
+                    <span>Role</span>
+                    <InputText @bind-Value="_draft.Role" maxlength="100" placeholder="e.g. Mission specialist" />
+                    <ValidationMessage For="@(() => _draft.Role)" />
+                </label>
+                <label class="field">
+                    <span>Mission environment</span>
+                    <InputSelect @bind-Value="_draft.MissionEnvironment">
+                        <option value="ISS">ISS</option>
+                        <option value="Lunar">Lunar</option>
+                        <option value="Mars">Mars</option>
+                    </InputSelect>
+                    <ValidationMessage For="@(() => _draft.MissionEnvironment)" />
+                </label>
+                <label class="field">
+                    <span>Mission start date</span>
+                    <InputDate @bind-Value="_draft.MissionStartDate" />
+                </label>
+
+                @if (_saveError is not null)
+                {
+                    <div class="notice-panel notice-error" role="alert">@_saveError</div>
+                }
+
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="_isSaving">
+                    @(_isSaving ? "Creating profile..." : "Create individual report")
+                </MudButton>
+            </EditForm>
+        </section>
+    </div>
+}
+
+@code {
+    private AstronautDto _draft = new();
+    private bool _isLoading = true;
+    private bool _isSaving;
+    private string? _loadError;
+    private string? _saveError;
+    private string? _successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Profiles.InitializeAsync();
+            Profiles.SelectedAstronautChanged += OnSelectedAstronautChanged;
+        }
+        catch (HttpRequestException exception)
+        {
+            _loadError = $"Unable to load crew profiles. Check the API and database connection. {exception.Message}";
+        }
+        catch (InvalidDataException exception)
+        {
+            _loadError = exception.Message;
+        }
+        catch (JsonException exception)
+        {
+            _loadError = $"The crew profiles response was invalid. {exception.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateProfileAsync()
+    {
+        _isSaving = true;
+        _saveError = null;
+        _successMessage = null;
+        try
+        {
+            var created = await Profiles.CreateAsync(_draft);
+            _successMessage = $"{created.Name}'s individual report is ready. New readings will be saved to this profile.";
+            _draft = new AstronautDto();
+        }
+        catch (HttpRequestException exception)
+        {
+            _saveError = $"The profile could not be saved. Check the API and database connection. {exception.Message}";
+        }
+        catch (InvalidDataException exception)
+        {
+            _saveError = exception.Message;
+        }
+        catch (JsonException exception)
+        {
+            _saveError = $"The crew profile response was invalid. {exception.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void SelectAstronaut(string astronautId) => Profiles.Select(astronautId);
+
+    private static string Initials(string name) =>
+        string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(part => char.ToUpperInvariant(part[0])));
+
+    private void OnSelectedAstronautChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Profiles.SelectedAstronautChanged -= OnSelectedAstronautChanged;
+}
